@@ -240,7 +240,7 @@ namespace bl_syauqi
             var msg =
                 JsonConvert.DeserializeObject<MessageDTO>(
                     await new StreamReader(req.Body).ReadToEndAsync());
-            var myEvent = new EventGridEvent(msg.id, "subject", msg.data, "evtType", DateTime.UtcNow, "1.0");
+            var myEvent = new EventGridEvent(msg.id, "subject", msg.data, "evtGridMessage.syauqi", DateTime.UtcNow, "1.0");
             await outputEvents.AddAsync(myEvent);
             return new OkObjectResult(myEvent);
         }
