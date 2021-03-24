@@ -1,15 +1,19 @@
 using System;
 using System.IO;
 using System.Threading.Tasks;
+using System.Collections.Generic;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Azure.EventGrid.Models;
 using Microsoft.Azure.WebJobs;
 using Microsoft.Azure.WebJobs.Extensions.Http;
+using Microsoft.Azure.WebJobs.Extensions.EventGrid;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Microsoft.Azure.Documents.Client;
 using Microsoft.Azure.Documents;
 using bl_syauqi.Models;
+using bl_syauqi.DTO;
 
 namespace bl_syauqi
 {
@@ -113,15 +117,18 @@ namespace bl_syauqi
 
         [FunctionName("DeletePersonNAsync")]
         public static async Task<IActionResult> DeletePersonNAsync(
-            [HttpTrigger(AuthorizationLevel.Function, "delete", Route = "PersonN/delete/{id}")] HttpRequest req,
+            [HttpTrigger(AuthorizationLevel.Function, "delete", Route = "PersonN/delete/{id}/{pk}")] HttpRequest req,
             [CosmosDB(ConnectionStringSetting = "cosmos-db-bl")] DocumentClient documentClient,
             string id,
+            string pk,
             ILogger log)
         {
             var rep = new Repository.Repositories.PersonRepository(documentClient);
             try
             {
-                await rep.DeleteAsync(id);
+                var parkey = new Dictionary<string,string>();
+                parkey.Add("City",pk);
+                await rep.DeleteAsync(id,partitionKeys: parkey);
                 return new OkObjectResult("Data berhasil dihapus");
             }
             catch (DocumentClientException e)
@@ -190,9 +197,10 @@ namespace bl_syauqi
 
         [FunctionName("DeleteStudentAsync")]
         public static async Task<IActionResult> DeleteStudentAsync(
-            [HttpTrigger(AuthorizationLevel.Function, "delete", Route = "Student/delete/{id}")] HttpRequest req,
+            [HttpTrigger(AuthorizationLevel.Function, "delete", Route = "Student/delete/{id}/{pk}")] HttpRequest req,
             [CosmosDB(ConnectionStringSetting = "cosmos-db-bl")] DocumentClient documentClient,
             string id,
+            string pk,
             ILogger log)
         {
             var rep = new Repository.Repositories.StudentRepository(documentClient);
@@ -221,6 +229,20 @@ namespace bl_syauqi
             var data = await rep.UpsertAsync(student.Id, student);
 
             return new OkObjectResult(data);
+        }
+
+        [FunctionName("PostEvGrid")]
+        public static async Task<IActionResult> PostEvGrid(
+            [HttpTrigger(AuthorizationLevel.Function, "post", Route = "evgrid")] HttpRequest req,
+            [EventGrid(TopicEndpointUri = "eventGridEndPoint", TopicKeySetting = "eventGridEndKey")] IAsyncCollector<EventGridEvent> outputEvents,
+            ILogger log)
+        {
+            var msg =
+                JsonConvert.DeserializeObject<MessageDTO>(
+                    await new StreamReader(req.Body).ReadToEndAsync());
+            var myEvent = new EventGridEvent(msg.id, "subject", msg.data, "evtType", DateTime.UtcNow, "1.0");
+            await outputEvents.AddAsync(myEvent);
+            return new OkObjectResult(myEvent);
         }
     }
 }
