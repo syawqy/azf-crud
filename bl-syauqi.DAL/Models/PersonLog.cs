@@ -4,7 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 
-namespace bl_syauqi.Models
+namespace bl_syauqi.DAL.Models
 {
     public class PersonLog : ModelBase
     {

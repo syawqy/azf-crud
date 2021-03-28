@@ -1,11 +1,9 @@
 ﻿using Microsoft.Azure.Documents.Client;
 using Nexus.Base.CosmosDBRepository;
 using System;
-using System.Collections.Generic;
-using System.Text;
-using bl_syauqi.Models;
+using bl_syauqi.DAL.Models;
 
-namespace bl_syauqi.Repository
+namespace bl_syauqi.DAL.Repository
 {
     public class Repositories
     {

@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netcoreapp3.1</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Nexus.Base.CosmosDBRepository" Version="2020.11.9.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\bl-syauqi.DAL\bl-syauqi.DAL.csproj" />
+  </ItemGroup>
+
+</Project>
