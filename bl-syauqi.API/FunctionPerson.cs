@@ -12,12 +12,15 @@ using System.Collections.Generic;
 using bl_syauqi.DAL.Models;
 using static bl_syauqi.DAL.Repository.Repositories;
 using bl_syauqi.BLL;
+using AzureFunctions.Extensions.Swashbuckle;
+using AzureFunctions.Extensions.Swashbuckle.Attribute;
 
 namespace bl_syauqi
 {
     public static class FunctionPerson
     {
         [FunctionName("GetAllPerson")]
+        
         public static async Task<IActionResult> GetAllPerson(
             [HttpTrigger(AuthorizationLevel.Function, "get", Route = "Person")] HttpRequest req,
             [CosmosDB(ConnectionStringSetting = "cosmos-db-bl")] DocumentClient client,
@@ -64,7 +67,8 @@ namespace bl_syauqi
 
         [FunctionName("CreatePersonAsync")]
         public static async Task<IActionResult> CreatePersonAsync(
-            [HttpTrigger(AuthorizationLevel.Function, "post", Route = "Person")] Person person,
+            [HttpTrigger(AuthorizationLevel.Function, "post", Route = "Person")]
+            [RequestBodyType(typeof(Person), "person request")] Person person,
             [CosmosDB(ConnectionStringSetting = "cosmos-db-bl")] DocumentClient client,
             ILogger log)
         {
@@ -76,7 +80,8 @@ namespace bl_syauqi
 
         [FunctionName("PutPersonAsync")]
         public static async Task<IActionResult> PutPersonAsync(
-            [HttpTrigger(AuthorizationLevel.Function, "put", Route = "Person")] Person person,
+            [HttpTrigger(AuthorizationLevel.Function, "put", Route = "Person")]
+            [RequestBodyType(typeof(Person), "person request")] Person person,
             [CosmosDB(ConnectionStringSetting = "cosmos-db-bl")] DocumentClient client,
             ILogger log)
         {

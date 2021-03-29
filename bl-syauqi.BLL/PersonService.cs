@@ -23,7 +23,7 @@ namespace bl_syauqi.BLL
         }
         public async Task<PageResult<Person>> GetPerson()
         {
-            return await _repository.GetAsync(predicate: p => p.City == "Bandung");
+            return await _repository.GetAsync(predicate:p => true);
         }
         public async Task<Document> CreatePerson(Person person)
         {
