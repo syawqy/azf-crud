@@ -20,25 +20,26 @@ namespace bl_syauqi
     public static class FunctionPerson
     {
         [FunctionName("GetAllPerson")]
-        
         public static async Task<IActionResult> GetAllPerson(
             [HttpTrigger(AuthorizationLevel.Function, "get", Route = "Person")] HttpRequest req,
-            [CosmosDB(ConnectionStringSetting = "cosmos-db-bl")] DocumentClient client,
             ILogger log)
         {
-            var personService = new PersonService(new PersonRepository(client));
+            var personService = new PersonService(new PersonRepository());
             var data = await personService.GetPerson();
-            return new OkObjectResult(data);
+            var rep = new PersonRepository();
+            var data2 = await rep.GetAsync();
+            var data3 = await rep.GetAsync(p => true);
+            var data4 = await rep.GetAsync(sqlQuery: "select * from c");
+            return new OkObjectResult(data2);
         }
 
         [FunctionName("GetPersonById")]
         public static async Task<IActionResult> GetPersonById(
             [HttpTrigger(AuthorizationLevel.Function, "get", Route = "Person/{id}")] HttpRequest req,
-            [CosmosDB(ConnectionStringSetting = "cosmos-db-bl")] DocumentClient client,
             string id,
             ILogger log)
         {
-            PersonService personService = new PersonService(new PersonRepository(client));
+            PersonService personService = new PersonService(new PersonRepository());
             var data = await personService.GetPersonById(id, new Dictionary<string, string> { { "City", "Bandung" } });
             return new OkObjectResult(data);
         }
@@ -46,10 +47,9 @@ namespace bl_syauqi
         [FunctionName("DeletePersonAsync")]
         public static async Task<IActionResult> DeletePersonAsync(
             [HttpTrigger(AuthorizationLevel.Function, "delete", Route = "Person")] Person person,
-            [CosmosDB(ConnectionStringSetting = "cosmos-db-bl")] DocumentClient client,
             ILogger log)
         {
-            PersonService personService = new PersonService(new PersonRepository(client));
+            PersonService personService = new PersonService(new PersonRepository());
             try
             {
                 var pk = new Dictionary<string, string>();
@@ -69,10 +69,9 @@ namespace bl_syauqi
         public static async Task<IActionResult> CreatePersonAsync(
             [HttpTrigger(AuthorizationLevel.Function, "post", Route = "Person")]
             [RequestBodyType(typeof(Person), "person request")] Person person,
-            [CosmosDB(ConnectionStringSetting = "cosmos-db-bl")] DocumentClient client,
             ILogger log)
         {
-            PersonService personService = new PersonService(new PersonRepository(client));
+            PersonService personService = new PersonService(new PersonRepository());
             var data = await personService.CreatePerson(person);
 
             return new OkObjectResult(data);
@@ -82,10 +81,9 @@ namespace bl_syauqi
         public static async Task<IActionResult> PutPersonAsync(
             [HttpTrigger(AuthorizationLevel.Function, "put", Route = "Person")]
             [RequestBodyType(typeof(Person), "person request")] Person person,
-            [CosmosDB(ConnectionStringSetting = "cosmos-db-bl")] DocumentClient client,
             ILogger log)
         {
-            PersonService personService = new PersonService(new PersonRepository(client));
+            PersonService personService = new PersonService(new PersonRepository());
             var data = await personService.UpdatePerson(person);
 
             return new OkObjectResult(data);

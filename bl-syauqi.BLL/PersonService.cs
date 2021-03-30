@@ -3,6 +3,7 @@ using Microsoft.Azure.Documents;
 using Nexus.Base.CosmosDBRepository;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using static bl_syauqi.DAL.Repository.Repositories;
 
 namespace bl_syauqi.BLL
 {
@@ -23,7 +24,8 @@ namespace bl_syauqi.BLL
         }
         public async Task<PageResult<Person>> GetPerson()
         {
-            return await _repository.GetAsync(predicate:p => true);
+            var data = await _repository.GetAsync(p => true);
+            return data;
         }
         public async Task<Document> CreatePerson(Person person)
         {

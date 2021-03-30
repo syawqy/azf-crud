@@ -9,7 +9,7 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "bl-syauqi.BLL", "bl-syauqi.
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "bl-syauqi.BLL.TEST", "bl-syauqi.BLL.TEST\bl-syauqi.BLL.TEST.csproj", "{BF7EE1C4-3C2F-42EB-B607-B8DF3A199ECB}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "bl-syauqi.API", "bl-syauqi.API\bl-syauqi.API.csproj", "{1D032140-5BF9-4494-9FA5-38F9F1131A3F}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "bl-syauqi.API", "bl-syauqi.API\bl-syauqi.API.csproj", "{1D032140-5BF9-4494-9FA5-38F9F1131A3F}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

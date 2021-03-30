@@ -2,6 +2,7 @@
 using Nexus.Base.CosmosDBRepository;
 using System;
 using bl_syauqi.DAL.Models;
+using Microsoft.Azure.Cosmos;
 
 namespace bl_syauqi.DAL.Repository
 {
@@ -13,13 +14,13 @@ namespace bl_syauqi.DAL.Repository
         private static readonly string _dbEndPoint = Environment.GetEnvironmentVariable("dbEndPoint");
         public class PersonRepository : DocumentDBRepository<Person>
         {
-            public PersonRepository(DocumentClient client) :
-                base("Course", client, partitionProperties: "City", eventGridEndPoint: _eventGridEndPoint, eventGridKey: _eventGridKey)
+            public PersonRepository() :
+                base(databaseId: "Course", endPoint: _dbEndPoint, key: _dbKey, partitionProperties: "City")
             { }
         }
         public class StudentRepository : DocumentDBRepository<Student>
         {
-            public StudentRepository(DocumentClient client) :
+            public StudentRepository(CosmosClient client) :
                 base("Course", client, partitionProperties: "City", eventGridEndPoint: _eventGridEndPoint, eventGridKey: _eventGridKey)
             { }
         }
