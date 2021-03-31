@@ -159,7 +159,9 @@ namespace bl_syauqi.API
             outputs.Add($"Job finished at - {DateTime.Now}");
             StreamingLocator sl = await context.CallActivityAsync<StreamingLocator>("getStreamLocator", json);
             outputs.Add($"get streamingLoctaor at - {DateTime.Now}");
-            outputs.Add($"streamingLoctaor url - {sl.StreamingLocatorId}");
+            List<string> urls = await context.CallActivityAsync<List<string>>("getStreamingUrls", json);
+            string urlString = String.Join(",", urls.ToArray());
+            outputs.Add($"streamingLoctaor url - {urlString}");
 
             return outputs;
         }
@@ -210,7 +212,7 @@ namespace bl_syauqi.API
             string rgname = "rg-beelingua-tutorial";
             string accname = "amsbltutorial";
             string assetname = jobDTO.assetName;
-            string locatorname = "tes-locator-syauqi";
+            string locatorname = assetname.Replace("input","locator");
             StreamingLocator locator = new StreamingLocator();
             try
             {
@@ -229,6 +231,47 @@ namespace bl_syauqi.API
                 log.LogError(ex.Message);
             }
             return locator;
+        }
+
+        [FunctionName("getStreamingUrls")]
+        public static async Task<List<string>> getStreamingUrls([ActivityTrigger]
+            IDurableActivityContext context,
+            ILogger log)
+        {
+            string json = context.GetInput<string>();
+            JobDTO jobDTO = JsonConvert.DeserializeObject<JobDTO>(json);
+            string rgname = "rg-beelingua-tutorial";
+            string accname = "amsbltutorial";
+            string locatorname = jobDTO.assetName.Replace("input", "locator");
+            const string DefaultStreamingEndpointName = "default";
+
+            List<string> streamingUrls = new List<string>();
+
+            StreamingEndpoint streamingEndpoint = await _client.StreamingEndpoints.GetAsync(rgname, accname, DefaultStreamingEndpointName);
+
+            if (streamingEndpoint != null)
+            {
+                if (streamingEndpoint.ResourceState != StreamingEndpointResourceState.Running)
+                {
+                    await _client.StreamingEndpoints.StartAsync(rgname, accname, DefaultStreamingEndpointName);
+                }
+            }
+
+            ListPathsResponse paths = await _client.StreamingLocators.ListPathsAsync(rgname, accname, locatorname);
+
+            foreach (StreamingPath path in paths.StreamingPaths)
+            {
+                UriBuilder uriBuilder = new UriBuilder
+                {
+                    Scheme = "https",
+                    Host = streamingEndpoint.HostName,
+
+                    Path = path.Paths[0]
+                };
+                streamingUrls.Add(uriBuilder.ToString());
+            }
+
+            return streamingUrls;
         }
     }
 }

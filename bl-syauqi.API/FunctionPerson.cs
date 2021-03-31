@@ -24,13 +24,11 @@ namespace bl_syauqi
             [HttpTrigger(AuthorizationLevel.Function, "get", Route = "Person")] HttpRequest req,
             ILogger log)
         {
+            var rep = new PersonRepository();
             var personService = new PersonService(new PersonRepository());
             var data = await personService.GetPerson();
-            var rep = new PersonRepository();
-            var data2 = await rep.GetAsync();
-            var data3 = await rep.GetAsync(p => true);
-            var data4 = await rep.GetAsync(sqlQuery: "select * from c");
-            return new OkObjectResult(data2);
+            
+            return new OkObjectResult(data);
         }
 
         [FunctionName("GetPersonById")]

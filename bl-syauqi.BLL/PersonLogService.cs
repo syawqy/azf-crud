@@ -18,7 +18,7 @@ namespace bl_syauqi.BLL
                 _repository = repository;
             }
         }
-        public async Task<Document> CreatePersonLog(PersonLog personlog)
+        public async Task<PersonLog> CreatePersonLog(PersonLog personlog)
         {
             return await _repository.CreateAsync(personlog);
         }

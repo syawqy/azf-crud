@@ -24,14 +24,15 @@ namespace bl_syauqi.BLL
         }
         public async Task<PageResult<Person>> GetPerson()
         {
+            var pk = new Dictionary<string, string> { { "City", "Bandung" } };
             var data = await _repository.GetAsync(p => true);
             return data;
         }
-        public async Task<Document> CreatePerson(Person person)
+        public async Task<Person> CreatePerson(Person person)
         {
             return await _repository.CreateAsync(person);
         }
-        public async Task<Document> UpdatePerson(Person person)
+        public async Task<Person> UpdatePerson(Person person)
         {
             return await _repository.UpdateAsync(person.Id,person);
         }
