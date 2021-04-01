@@ -19,6 +19,9 @@ using AzureFunctions.Extensions.Swashbuckle.Attribute;
 using bl_syauqi.API.DTO;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Http;
+using Newtonsoft.Json;
+using System.IO;
 
 namespace bl_syauqi.API
 {
@@ -26,12 +29,15 @@ namespace bl_syauqi.API
     {
         [FunctionName("PostEmail")]
         public static async Task<IActionResult> PostEmail(
-            [HttpTrigger(AuthorizationLevel.Function, "post", Route = "PostEmail")]
-            [RequestBodyType(typeof(EmailDTO), "person request")] EmailDTO emailDTO,
+            [HttpTrigger(AuthorizationLevel.Function, "post", Route = "PostEmail")] HttpRequest req,
+            //[RequestBodyType(typeof(EmailDTO), "person request")] EmailDTO emailDTO,
             [SendGrid(ApiKey = "sendgrid-key")] IAsyncCollector<SendGridMessage> messageCollector,
             ILogger log)
         {
-            
+            var file = req.Form.Files["file"];
+            var datalain = await req.ReadFormAsync();
+            EmailDTO emailDTO = JsonConvert.DeserializeObject<EmailDTO>(datalain["data"]);
+
             var emaildata = new Dictionary<string, string>();
             emaildata.Add("namauser", emailDTO.namauser);
             emaildata.Add("subject", emailDTO.subject);
@@ -49,7 +55,14 @@ namespace bl_syauqi.API
             {
                 message.AddTo(email);
             }
-
+            string f64;
+            using (var ms = new MemoryStream())
+            {
+                file.CopyTo(ms);
+                var fb = ms.ToArray();
+                f64 = Convert.ToBase64String(fb);
+            }
+            message.AddAttachment(file.FileName, f64);
             await messageCollector.AddAsync(message);
 
             //message.AddContent("text/plain", $"{order.CustomerName}, your order ({order.OrderId}) is being processed!");
