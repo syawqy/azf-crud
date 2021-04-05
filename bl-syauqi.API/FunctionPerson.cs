@@ -17,6 +17,7 @@ using AzureFunctions.Extensions.Swashbuckle.Attribute;
 
 namespace bl_syauqi
 {
+    // TODO: dibiasakan kerja rapih, d folder2kan class berdasarkan objective
     public static class FunctionPerson
     {
         [FunctionName("GetAllPerson")]
@@ -25,12 +26,17 @@ namespace bl_syauqi
             ILogger log)
         {
             var rep = new PersonRepository();
+
+            // TODO: saat startup dibuat DI untuk cosmosclient, supaya singleton.
+            //       klo di-define pada saat pembuatan repo, d takutkan object akan d buat berkali2 which is akan membuat performance drop.
             var personService = new PersonService(new PersonRepository());
             var data = await personService.GetPerson();
             
             return new OkObjectResult(data);
         }
 
+        // TODO: swagger untuk response ditambahkan utk semua AZF. 
+        // utk http 200, badrequest, notfound --> cek dokumentasi "Implementasi Swagger UI pada Azure Function v3 dengan Menggunakan Swashbuckle"
         [FunctionName("GetPersonById")]
         public static async Task<IActionResult> GetPersonById(
             [HttpTrigger(AuthorizationLevel.Function, "get", Route = "Person/{id}")] HttpRequest req,

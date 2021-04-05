@@ -11,6 +11,8 @@ namespace bl_syauqi.BLL.TEST
 {
     public class PersonServiceTest
     {
+        // TODO: Buat class utk mengelompokan methods
+
         [Theory]
         [InlineData("1")]
         [InlineData("4")]
@@ -39,5 +41,8 @@ namespace bl_syauqi.BLL.TEST
             // assert
             Assert.Equal(personData, act);
         }
+
+        // TODO: Buat test untuk methods yang lain
+
     }
 }
