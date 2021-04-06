@@ -1,9 +1,12 @@
 using System;
 using System.Reflection;
 using AzureFunctions.Extensions.Swashbuckle;
+using Microsoft.Azure.Cosmos;
+using Microsoft.Azure.Cosmos.Fluent;
 using Microsoft.Azure.Functions.Extensions.DependencyInjection;
 using Microsoft.Azure.WebJobs;
 using Microsoft.Azure.WebJobs.Hosting;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 [assembly: FunctionsStartup(typeof(SwaggerUIAzureFunc.Startup))]
@@ -20,6 +23,15 @@ namespace SwaggerUIAzureFunc
         private static void Configure(IFunctionsHostBuilder builder)
         {
             // register other services here
+            builder.Services.AddSingleton((s) => {
+                var connectionString = Environment.GetEnvironmentVariable("cosmos-db-bl");
+                if (string.IsNullOrEmpty(connectionString))
+                {
+                    throw new InvalidOperationException(
+                        "Please specify a valid CosmosDBConnection in the appSettings.json file or your Azure Functions Settings.");
+                }
+                return new CosmosClientBuilder(connectionString).Build();
+            });
         }
     }
 
@@ -29,6 +41,7 @@ namespace SwaggerUIAzureFunc
         {
             var serviceCollection = services;
             Services = serviceCollection ?? throw new ArgumentNullException(nameof(services));
+
         }
 
         public IServiceCollection Services { get; }

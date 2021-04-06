@@ -36,9 +36,17 @@ namespace bl_syauqi.BLL
         {
             return await _repository.UpdateAsync(person.Id,person);
         }
-        public async void DeletePerson(string id, Dictionary<string, string> pk)
+        public async Task<string> DeletePerson(string id, Dictionary<string, string> pk)
         {
-            await _repository.DeleteAsync(id,pk);
+            try
+            {
+                await _repository.DeleteAsync(id, pk);
+                return "Data berhasil dihapus";
+            }catch
+            {
+                return "Data tidak ditemukan";
+            }
+            
         }
     }
 }

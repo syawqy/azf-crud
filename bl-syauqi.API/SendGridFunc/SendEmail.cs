@@ -22,11 +22,15 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Http;
 using Newtonsoft.Json;
 using System.IO;
+using System.Net;
 
 namespace bl_syauqi.API
 {
     public static class SendEmail
     {
+        [ProducesResponseType((int)HttpStatusCode.OK, Type = typeof(IActionResult))]
+        [ProducesResponseType((int)HttpStatusCode.BadRequest, Type = typeof(string))]
+        [ProducesResponseType((int)HttpStatusCode.NotFound, Type = typeof(string))]
         [FunctionName("PostEmail")]
         public static async Task<IActionResult> PostEmail(
             [HttpTrigger(AuthorizationLevel.Function, "post", Route = "PostEmail")] HttpRequest req,

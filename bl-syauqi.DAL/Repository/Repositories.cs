@@ -14,8 +14,8 @@ namespace bl_syauqi.DAL.Repository
         private static readonly string _dbEndPoint = Environment.GetEnvironmentVariable("dbEndPoint");
         public class PersonRepository : DocumentDBRepository<Person>
         {
-            public PersonRepository() :
-                base(databaseId: "Course", endPoint: _dbEndPoint, key: _dbKey, partitionProperties: "City")
+            public PersonRepository(CosmosClient client) :
+                base(databaseId: "Course", client, partitionProperties: "City")
             { }
         }
         public class StudentRepository : DocumentDBRepository<Student>
