@@ -30,10 +30,12 @@ namespace bl_syauqi.BLL
         }
         public async Task<Person> CreatePerson(Person person)
         {
+            person.FirstName += " - new";
             return await _repository.CreateAsync(person);
         }
         public async Task<Person> UpdatePerson(Person person)
         {
+            person.FirstName += " - edited";
             return await _repository.UpdateAsync(person.Id,person);
         }
         public async Task<string> DeletePerson(string id, Dictionary<string, string> pk)

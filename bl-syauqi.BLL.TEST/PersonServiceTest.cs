@@ -58,7 +58,7 @@ namespace bl_syauqi.BLL.TEST
                 };
                 var personData = persons.Where(o => o.Id == id).FirstOrDefault();
                 repo.Setup(c => c.GetByIdAsync(
-                    It.IsAny<string>(),
+                    It.Is<string>(i => persons.Any(a => a.Id == i)),
                     It.IsAny<Dictionary<string, string>>()
                 )).Returns(
                     Task.FromResult<Person>(personData)
@@ -69,7 +69,7 @@ namespace bl_syauqi.BLL.TEST
                 var act = await svc.GetPersonById(id, null);
 
                 // assert
-                Assert.Equal(personData, act);
+                Assert.Null(act);
             }
         }
 
@@ -77,7 +77,7 @@ namespace bl_syauqi.BLL.TEST
         public class CreatePerson
         {
             [Fact]
-            public async void CreatePerson_Success()
+            public async void CreateNormal_Success()
             {
                 // arrange
                 var repo = new Mock<IDocumentDBRepository<Person>>();
@@ -103,9 +103,9 @@ namespace bl_syauqi.BLL.TEST
                 var act = await svc.CreatePerson(personnew);
 
                 // assert
-                Assert.Equal(personnew.Id, act.Id);
-                Assert.Equal(personnew.FirstName, act.FirstName);
-                Assert.Equal(personnew.LastName, act.LastName);
+                Assert.Contains("- new",act.FirstName);
+                //Assert.Equal(personnew.FirstName, act.FirstName);
+                //Assert.Equal(personnew.LastName, act.LastName);
             }
         }
         public class PutPerson
@@ -137,9 +137,9 @@ namespace bl_syauqi.BLL.TEST
                 var act = await svc.UpdatePerson(personnew);
 
                 // assert
-                Assert.Equal(personnew.Id, act.Id);
-                Assert.Equal(personnew.FirstName, act.FirstName);
-                Assert.Equal(personnew.LastName, act.LastName);
+                Assert.Contains("- edit", personnew.FirstName);
+                //Assert.Equal(personnew.FirstName, act.FirstName);
+                //Assert.Equal(personnew.LastName, act.LastName);
             }
         }
         public class DeletePerson

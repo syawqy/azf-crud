@@ -8,6 +8,10 @@ using Microsoft.Azure.WebJobs;
 using Microsoft.Azure.WebJobs.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.IdentityModel.Clients.ActiveDirectory;
+using Microsoft.Rest;
+using Microsoft.Rest.Azure.Authentication;
+using Microsoft.Azure.Management.Media;
 
 [assembly: FunctionsStartup(typeof(SwaggerUIAzureFunc.Startup))]
 namespace SwaggerUIAzureFunc
@@ -32,6 +36,7 @@ namespace SwaggerUIAzureFunc
                 }
                 return new CosmosClientBuilder(connectionString).Build();
             });
+            
         }
     }
 
@@ -41,7 +46,6 @@ namespace SwaggerUIAzureFunc
         {
             var serviceCollection = services;
             Services = serviceCollection ?? throw new ArgumentNullException(nameof(services));
-
         }
 
         public IServiceCollection Services { get; }

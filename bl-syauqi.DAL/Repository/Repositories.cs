@@ -18,6 +18,12 @@ namespace bl_syauqi.DAL.Repository
                 base(databaseId: "Course", client, partitionProperties: "City")
             { }
         }
+        public class VideoRepository : DocumentDBRepository<ResourceVideo>
+        {
+            public VideoRepository(CosmosClient client) :
+                base(databaseId: "Course", client)
+            { }
+        }
         public class StudentRepository : DocumentDBRepository<Student>
         {
             public StudentRepository(CosmosClient client) :

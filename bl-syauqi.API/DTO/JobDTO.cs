@@ -8,6 +8,8 @@ namespace bl_syauqi.API.DTO
     public class JobDTO
     {
         public string jobName { get; set; }
-        public string assetName { get; set; }
+        public string inputName { get; set; }
+        public string outputName { get; set; }
+        public string videoId { get; set; }
     }
 }

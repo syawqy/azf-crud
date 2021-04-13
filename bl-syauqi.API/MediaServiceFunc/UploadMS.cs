@@ -19,13 +19,32 @@ using Azure.Storage.Blobs;
 using System.Collections.Generic;
 using Microsoft.Azure.WebJobs.Extensions.DurableTask;
 using bl_syauqi.API.DTO;
+using Microsoft.Azure.Cosmos;
+using bl_syauqi.BLL;
+using static bl_syauqi.DAL.Repository.Repositories;
+using bl_syauqi.DAL.Models;
 
 namespace bl_syauqi.API
 {
-    public static class UploadMS
+    public class UploadMS
     {
         private static readonly string _azConn = Environment.GetEnvironmentVariable("azConnection");
         private static IAzureMediaServicesClient _client;
+        private static ClientCredential _clientCredential;
+        private static string aadtenantid = "0fa1f3f9-1330-425b-876a-9ffe2e503091";
+        private static string armendpoint = "https://management.azure.com";
+        private static string subid = "bda026af-224f-407e-b2fb-adeee91f9644";
+        private static string rgname = "rg-beelingua-tutorial";
+        private static string accname = "amsbltutorial";
+        private readonly CosmosClient _cosmosClient;
+
+        public UploadMS(CosmosClient cosmosClient)
+        {
+            var aadclientid = "4542d90b-4ad0-4751-b8e9-d1c299d0b3bd";
+            var aadsecret = "NJOWET1~-A09480f_uPl5SIjdZ.Wv3A_Pu";
+            _clientCredential = new ClientCredential(aadclientid, aadsecret);
+            _cosmosClient = cosmosClient;
+        }
 
         [FunctionName("UploadVideo")]
         public static async Task<IActionResult> UploadVideo(
@@ -39,17 +58,10 @@ namespace bl_syauqi.API
                 var file = req.Form.Files["file"];
 
                 string uniqueness = Guid.NewGuid().ToString("N");
-                var aadclientid = "4542d90b-4ad0-4751-b8e9-d1c299d0b3bd";
-                var aadsecret = "NJOWET1~-A09480f_uPl5SIjdZ.Wv3A_Pu";
-                var aadtenantid = "0fa1f3f9-1330-425b-876a-9ffe2e503091";
-                var armendpoint = "https://management.azure.com";
-                var subid = "bda026af-224f-407e-b2fb-adeee91f9644";
-                var rgname = "rg-beelingua-tutorial";
-                var accname = "amsbltutorial";
+                
                 var assetname = $"input-{uniqueness}";
 
-                ClientCredential clientCredential = new ClientCredential(aadclientid, aadsecret);
-                ServiceClientCredentials cred = await ApplicationTokenProvider.LoginSilentAsync(aadtenantid, clientCredential, ActiveDirectoryServiceSettings.Azure);
+                ServiceClientCredentials cred = await ApplicationTokenProvider.LoginSilentAsync(aadtenantid, _clientCredential, ActiveDirectoryServiceSettings.Azure);
 
                 IAzureMediaServicesClient client = new AzureMediaServicesClient(new Uri(armendpoint), cred)
                 {
@@ -77,7 +89,7 @@ namespace bl_syauqi.API
 
                 Asset outputAsset = await client.Assets.GetAsync(rgname, accname, assetname);
                 Asset newasset = new Asset();
-                string outputAssetName = assetname;
+                string outputAssetName = assetname.Replace("input","output");
 
                 if (outputAsset != null)
                 {
@@ -132,10 +144,98 @@ namespace bl_syauqi.API
                 JobDTO jobDTO = new JobDTO()
                 {
                     jobName = jobname,
-                    assetName = outputAssetName
+                    outputName = outputAssetName
                 };
                 string jsonobj = JsonConvert.SerializeObject(jobDTO);
                 string instanceId = await starter.StartNewAsync("CheckJobStatus", input:jsonobj);
+
+                log.LogInformation($"Started orchestration with ID = '{instanceId}'.");
+
+                return starter.CreateCheckStatusResponse(req, instanceId);
+            }
+            catch (Exception ex)
+            {
+                return new BadRequestObjectResult(ex);
+            }
+        }
+        [FunctionName("GetSasUrl")]
+        public async Task<IActionResult> GetSasUrl(
+            [HttpTrigger(AuthorizationLevel.Function, "get", Route = "video/init")] HttpRequest req,
+            [DurableClient] IDurableOrchestrationClient starter,
+            ILogger log)
+        {
+            try
+            {
+                string uniqueness = Guid.NewGuid().ToString("N");
+                var videoService = new VideoService(new VideoRepository(_cosmosClient));
+
+                var assetname = $"input-{uniqueness}";
+
+                ServiceClientCredentials cred = await ApplicationTokenProvider.LoginSilentAsync(aadtenantid, _clientCredential, ActiveDirectoryServiceSettings.Azure);
+
+                IAzureMediaServicesClient client = new AzureMediaServicesClient(new Uri(armendpoint), cred)
+                {
+                    SubscriptionId = subid,
+                };
+                _client = client;
+
+                Asset asset = await client.Assets.CreateOrUpdateAsync(rgname, accname, assetname, new Asset());
+
+                var response = await client.Assets.ListContainerSasAsync(
+                    rgname,
+                    accname,
+                    assetname,
+                    permissions: AssetContainerPermission.ReadWrite,
+                    expiryTime: DateTime.UtcNow.AddHours(4).ToUniversalTime());
+
+                var sasUri = new Uri(response.AssetContainerSasUrls.First());
+
+                var sasurlupload = sasUri.AbsoluteUri;
+
+                ResourceVideo newvideo = new ResourceVideo()
+                {
+                    Type = "Video",
+                    Subject = "test video",
+                    Status = "Draft",
+                    ContainerId = uniqueness
+                };
+                var addedvideo = await videoService.CreatePerson(newvideo);
+
+                var result = new GetSaSDTO()
+                {
+                    uploadUrl = sasurlupload,
+                    videoId = addedvideo.Id
+                };
+
+                return new OkObjectResult(result);
+            }
+            catch (Exception ex)
+            {
+                return new BadRequestObjectResult(ex);
+            }
+        }
+        [FunctionName("RunEncode")]
+        public async Task<IActionResult> RunEncode(
+            [HttpTrigger(AuthorizationLevel.Function, "post", Route = "video/encode")] HttpRequest req,
+            [DurableClient] IDurableOrchestrationClient starter,
+            ILogger log)
+        {
+            try
+            {
+                var json = await req.ReadAsStringAsync();
+                var data = JsonConvert.DeserializeObject<GetSaSDTO>(json);
+                var videoService = new VideoService(new VideoRepository(_cosmosClient));
+
+                var datavideo = await videoService.GetVideoById(data.videoId);
+
+                var jobDTO = new JobDTO()
+                {
+                    inputName = "input-"+datavideo.ContainerId,
+                    videoId = datavideo.Id
+                };
+                var jobjson = JsonConvert.SerializeObject(jobDTO);
+
+                string instanceId = await starter.StartNewAsync("CheckJobStatus",input:jobjson);
 
                 log.LogInformation($"Started orchestration with ID = '{instanceId}'.");
 
@@ -153,7 +253,9 @@ namespace bl_syauqi.API
             string json = context.GetInput<string>();
             var outputs = new List<string>();
 
-            // Replace "hello" with the name of your Durable Activity Function.
+            outputs.Add($"Prepare for encoding at - {DateTime.Now}");
+            JobDTO jobDTO = await context.CallActivityAsync<JobDTO>("StartEncode", json);
+            json = JsonConvert.SerializeObject(jobDTO);
             outputs.Add($"Job Started at - {DateTime.Now}");
             Job job = await context.CallActivityAsync<Job>("cekUpdateJob", json);
             outputs.Add($"Job finished at - {DateTime.Now}");
@@ -165,17 +267,76 @@ namespace bl_syauqi.API
 
             return outputs;
         }
-        [FunctionName("cekUpdateJob")]
-        public static async Task<Job> cekUpdateJob([ActivityTrigger] IDurableActivityContext context,
+        [FunctionName("StartEncode")]
+        public async Task<JobDTO> StartEncode([ActivityTrigger] IDurableActivityContext context,
             ILogger log)
         {
             string json = context.GetInput<string>();
             JobDTO jobDTO = JsonConvert.DeserializeObject<JobDTO>(json);
-            const int SleepIntervalMs = 20 * 1000;
-            string rgname = "rg-beelingua-tutorial";
-            string accname = "amsbltutorial";
+            var assetname = jobDTO.inputName;
+            string tranfname = "bltutorial-syauqi";
+
+            var videoService = new VideoService(new VideoRepository(_cosmosClient));
+            var datavideo = await videoService.GetVideoById(jobDTO.videoId);
+
+            Asset newasset = new Asset();
+            string outputAssetName = assetname.Replace("input", "output");
+
+            var updatedAsset = await _client.Assets.CreateOrUpdateAsync(rgname, accname, outputAssetName, newasset);
+
+            Transform transform = await _client.Transforms.GetAsync(rgname, accname, tranfname);
+            if (transform == null)
+            {
+                TransformOutput[] output = new TransformOutput[]
+                {
+                        new TransformOutput
+                        {
+                            Preset = new BuiltInStandardEncoderPreset()
+                            {
+                                PresetName = EncoderNamedPreset.AdaptiveStreaming
+                            }
+                        }
+                };
+                transform = await _client.Transforms.CreateOrUpdateAsync(rgname, accname, tranfname, output);
+            }
+            JobInput jobInput = new JobInputAsset(assetName: assetname);
+
+            JobOutput[] jobOutputs =
+            {
+                new JobOutputAsset(outputAssetName),
+            };
+            var jobname = assetname.Replace("input", "job-encode-");
+            Job job = await _client.Jobs.CreateAsync(
+                rgname,
+                accname,
+                tranfname,
+                jobname,
+                new Job
+                {
+                    Input = jobInput,
+                    Outputs = jobOutputs,
+                });
+
+            jobDTO.jobName = jobname;
+            jobDTO.outputName = outputAssetName;
+
+            datavideo.Status = "Encoding";
+            await videoService.UpdateVideo(datavideo);
+
+            return jobDTO;
+        }
+        [FunctionName("cekUpdateJob")]
+        public async Task<Job> cekUpdateJob([ActivityTrigger] IDurableActivityContext context,
+            ILogger log)
+        {
+            string json = context.GetInput<string>();
+            JobDTO jobDTO = JsonConvert.DeserializeObject<JobDTO>(json);
+            const int SleepIntervalMs = 10 * 1000;
             string tranfname = "bltutorial-syauqi";
             string jobName = jobDTO.jobName;
+
+            var videoService = new VideoService(new VideoRepository(_cosmosClient));
+            var datavideo = await videoService.GetVideoById(jobDTO.videoId);
 
             Job job;
             do
@@ -200,6 +361,9 @@ namespace bl_syauqi.API
             }
             while (job.State != JobState.Finished && job.State != JobState.Error && job.State != JobState.Canceled);
 
+            datavideo.Status = "Finished Encoding";
+            await videoService.UpdateVideo(datavideo);
+
             return job;
         }
         [FunctionName("getStreamLocator")]
@@ -209,10 +373,8 @@ namespace bl_syauqi.API
         {
             string json = context.GetInput<string>();
             JobDTO jobDTO = JsonConvert.DeserializeObject<JobDTO>(json);
-            string rgname = "rg-beelingua-tutorial";
-            string accname = "amsbltutorial";
-            string assetname = jobDTO.assetName;
-            string locatorname = assetname.Replace("input","locator");
+            string assetname = jobDTO.outputName;
+            string locatorname = assetname.Replace("output","locator");
             StreamingLocator locator = new StreamingLocator();
             try
             {
@@ -234,16 +396,17 @@ namespace bl_syauqi.API
         }
 
         [FunctionName("getStreamingUrls")]
-        public static async Task<List<string>> getStreamingUrls([ActivityTrigger]
+        public async Task<List<string>> getStreamingUrls([ActivityTrigger]
             IDurableActivityContext context,
             ILogger log)
         {
             string json = context.GetInput<string>();
             JobDTO jobDTO = JsonConvert.DeserializeObject<JobDTO>(json);
-            string rgname = "rg-beelingua-tutorial";
-            string accname = "amsbltutorial";
-            string locatorname = jobDTO.assetName.Replace("input", "locator");
+            string locatorname = jobDTO.outputName.Replace("output", "locator");
             const string DefaultStreamingEndpointName = "default";
+
+            var videoService = new VideoService(new VideoRepository(_cosmosClient));
+            var datavideo = await videoService.GetVideoById(jobDTO.videoId);
 
             List<string> streamingUrls = new List<string>();
 
@@ -270,6 +433,9 @@ namespace bl_syauqi.API
                 };
                 streamingUrls.Add(uriBuilder.ToString());
             }
+
+            datavideo.streamingUrl = String.Join(",", streamingUrls.ToArray());
+            await videoService .UpdateVideo(datavideo);
 
             return streamingUrls;
         }

@@ -2,6 +2,8 @@
 
   <PropertyGroup>
     <TargetFramework>netcoreapp3.1</TargetFramework>
+    <AssemblyName>bl_syauqi.BLL</AssemblyName>
+    <RootNamespace>bl_syauqi.BLL</RootNamespace>
   </PropertyGroup>
 
   <ItemGroup>

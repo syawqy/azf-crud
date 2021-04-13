@@ -58,6 +58,10 @@ namespace bl_syauqi
         {
             PersonService personService = new PersonService(new PersonRepository(_cosmosClient));
             var data = await personService.GetPersonById(id, new Dictionary<string, string> { { "City", "Bandung" } });
+            if(data == null)
+            {
+                return new NotFoundObjectResult("Data tidak ditemukan");
+            }
             return new OkObjectResult(data);
         }
         [ProducesResponseType((int)HttpStatusCode.OK, Type = typeof(Person))]
@@ -111,6 +115,11 @@ namespace bl_syauqi
             ILogger log)
         {
             PersonService personService = new PersonService(new PersonRepository(_cosmosClient));
+            var dataPerson = await personService.GetPersonById(person.Id, new Dictionary<string, string> { { "City", person.City } });
+            if (dataPerson == null)
+            {
+                return new NotFoundObjectResult("Data tidak ditemukan");
+            }
             var data = await personService.UpdatePerson(person);
 
             return new OkObjectResult(data);
