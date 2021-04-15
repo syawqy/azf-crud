@@ -23,6 +23,8 @@ using Microsoft.Azure.Cosmos;
 using bl_syauqi.BLL;
 using static bl_syauqi.DAL.Repository.Repositories;
 using bl_syauqi.DAL.Models;
+using System.Net;
+using AzureFunctions.Extensions.Swashbuckle.Attribute;
 
 namespace bl_syauqi.API
 {
@@ -158,6 +160,9 @@ namespace bl_syauqi.API
                 return new BadRequestObjectResult(ex);
             }
         }
+        [ProducesResponseType((int)HttpStatusCode.OK, Type = typeof(GetSaSDTO))]
+        [ProducesResponseType((int)HttpStatusCode.BadRequest, Type = typeof(string))]
+        [ProducesResponseType((int)HttpStatusCode.NotFound, Type = typeof(string))]
         [FunctionName("GetSasUrl")]
         public async Task<IActionResult> GetSasUrl(
             [HttpTrigger(AuthorizationLevel.Function, "get", Route = "video/init")] HttpRequest req,
@@ -178,8 +183,8 @@ namespace bl_syauqi.API
                     SubscriptionId = subid,
                 };
                 _client = client;
-
-                Asset asset = await client.Assets.CreateOrUpdateAsync(rgname, accname, assetname, new Asset(assetname,assetname,description:"original file"));
+                var newAsset = new Asset(name:assetname, container:assetname, description: "original file");
+                Asset asset = await client.Assets.CreateOrUpdateAsync(rgname, accname, assetname, newAsset);
 
                 var response = await client.Assets.ListContainerSasAsync(
                     rgname,
@@ -197,7 +202,8 @@ namespace bl_syauqi.API
                     Type = "Video",
                     Subject = "test video",
                     Status = "Draft",
-                    ContainerId = uniqueness
+                    ContainerId = uniqueness,
+                    InputContainer = asset.Container
                 };
                 var addedvideo = await videoService.CreatePerson(newvideo);
 
@@ -214,16 +220,20 @@ namespace bl_syauqi.API
                 return new BadRequestObjectResult(ex);
             }
         }
+        [ProducesResponseType((int)HttpStatusCode.OK, Type = typeof(string))]
+        [ProducesResponseType((int)HttpStatusCode.BadRequest, Type = typeof(string))]
+        [ProducesResponseType((int)HttpStatusCode.NotFound, Type = typeof(string))]
         [FunctionName("RunEncode")]
         public async Task<IActionResult> RunEncode(
-            [HttpTrigger(AuthorizationLevel.Function, "post", Route = "video/encode")] HttpRequest req,
+            [HttpTrigger(AuthorizationLevel.Function, "post", Route = "video/encode")]
+            [RequestBodyType(typeof(GetSaSDTO), "data")] GetSaSDTO data,
             [DurableClient] IDurableOrchestrationClient starter,
             ILogger log)
         {
             try
             {
-                var json = await req.ReadAsStringAsync();
-                var data = JsonConvert.DeserializeObject<GetSaSDTO>(json);
+                //var json = await req.ReadAsStringAsync();
+                //var data = JsonConvert.DeserializeObject<GetSaSDTO>(json);
                 var videoService = new VideoService(new VideoRepository(_cosmosClient));
 
                 var datavideo = await videoService.GetVideoById(data.videoId);
@@ -239,7 +249,36 @@ namespace bl_syauqi.API
 
                 log.LogInformation($"Started orchestration with ID = '{instanceId}'.");
 
-                return starter.CreateCheckStatusResponse(req, instanceId);
+                //return starter.CreateCheckStatusResponse(req, instanceId);
+                return new OkObjectResult("Starting Encode");
+            }
+            catch (Exception ex)
+            {
+                return new BadRequestObjectResult(ex);
+            }
+        }
+        [ProducesResponseType((int)HttpStatusCode.OK, Type = typeof(ResourceVideo))]
+        [ProducesResponseType((int)HttpStatusCode.BadRequest, Type = typeof(string))]
+        [ProducesResponseType((int)HttpStatusCode.NotFound, Type = typeof(string))]
+        [FunctionName("GetStatus")]
+        public async Task<IActionResult> GetStatus(
+            [HttpTrigger(AuthorizationLevel.Function, "post", Route = "video/status")]
+            [RequestBodyType(typeof(GetSaSDTO), "data")] GetSaSDTO data,
+            ILogger log)
+        {
+            try
+            {
+                //var json = await req.ReadAsStringAsync();
+                //var data = JsonConvert.DeserializeObject<GetSaSDTO>(json);
+                var videoService = new VideoService(new VideoRepository(_cosmosClient));
+
+                var datavideo = await videoService.GetVideoById(data.videoId);
+
+                if(datavideo == null)
+                {
+                    return new NotFoundObjectResult("Data tidak ditemukan");
+                }
+                return new OkObjectResult(datavideo);
             }
             catch (Exception ex)
             {
@@ -280,9 +319,14 @@ namespace bl_syauqi.API
             var datavideo = await videoService.GetVideoById(jobDTO.videoId);
 
             string outputAssetName = assetname.Replace("input", "output");
-            Asset newasset = new Asset(outputAssetName,outputAssetName,description:"hasil encode");
+            Asset newasset = new Asset(name:outputAssetName,container:outputAssetName,description:"hasil encode");
 
-            var updatedAsset = await _client.Assets.CreateOrUpdateAsync(rgname, accname, outputAssetName, newasset);
+            Asset cekAsset = await _client.Assets.GetAsync(rgname, accname, outputAssetName);
+
+            if(cekAsset == null)
+            {
+                await _client.Assets.CreateOrUpdateAsync(rgname, accname, outputAssetName, newasset);
+            }
 
             Transform transform = await _client.Transforms.GetAsync(rgname, accname, tranfname);
             if (transform == null)
@@ -366,6 +410,7 @@ namespace bl_syauqi.API
             jobDTO.outputName = outputAssetName;
 
             datavideo.Status = "Encoding";
+            datavideo.OutputContainer = newasset.Container;
             await videoService.UpdateVideo(datavideo);
 
             return jobDTO;
@@ -377,7 +422,7 @@ namespace bl_syauqi.API
             string json = context.GetInput<string>();
             JobDTO jobDTO = JsonConvert.DeserializeObject<JobDTO>(json);
             const int SleepIntervalMs = 10 * 1000;
-            string tranfname = "bltutorial-syauqi";
+            string tranfname = "bltutorial-syauqi-encode-2";
             string jobName = jobDTO.jobName;
 
             var videoService = new VideoService(new VideoRepository(_cosmosClient));
@@ -386,7 +431,14 @@ namespace bl_syauqi.API
             Job job;
             do
             {
-                job = await _client.Jobs.GetAsync(rgname, accname, tranfname, jobName);
+                try
+                {
+                    job = await _client.Jobs.GetAsync(rgname, accname, tranfname, jobName);
+                }
+                catch
+                {
+                    throw new Exception("Job tidak ditemukan");
+                }
 
                 log.LogInformation($"Job is '{job.State}'.");
                 for (int i = 0; i < job.Outputs.Count; i++)
@@ -479,7 +531,7 @@ namespace bl_syauqi.API
                 streamingUrls.Add(uriBuilder.ToString());
             }
 
-            datavideo.streamingUrl = String.Join(",", streamingUrls.ToArray());
+            datavideo.StreamingUrl = streamingUrls.ToArray();
             await videoService .UpdateVideo(datavideo);
 
             return streamingUrls;

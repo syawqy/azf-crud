@@ -21,6 +21,10 @@ namespace bl_syauqi.DAL.Models
         [JsonProperty("containerId")]
         public string ContainerId { get; set; }
         [JsonProperty("streamingUrl")]
-        public string streamingUrl { get; set; }
+        public string[] StreamingUrl { get; set; }
+        [JsonProperty("inputContainer")]
+        public string InputContainer { get; set; }
+        [JsonProperty("outputContainer")]
+        public string OutputContainer { get; set; }
     }
 }

@@ -4,7 +4,7 @@ using System.Text;
 
 namespace bl_syauqi.API.DTO
 {
-    class GetSaSDTO
+    public class GetSaSDTO
     {
         public string uploadUrl { get; set; }
         public string videoId { get; set; }
