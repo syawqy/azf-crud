@@ -179,7 +179,7 @@ namespace bl_syauqi.API
                 };
                 _client = client;
 
-                Asset asset = await client.Assets.CreateOrUpdateAsync(rgname, accname, assetname, new Asset());
+                Asset asset = await client.Assets.CreateOrUpdateAsync(rgname, accname, assetname, new Asset(assetname,assetname,description:"original file"));
 
                 var response = await client.Assets.ListContainerSasAsync(
                     rgname,
@@ -274,13 +274,13 @@ namespace bl_syauqi.API
             string json = context.GetInput<string>();
             JobDTO jobDTO = JsonConvert.DeserializeObject<JobDTO>(json);
             var assetname = jobDTO.inputName;
-            string tranfname = "bltutorial-syauqi";
+            string tranfname = "bltutorial-syauqi-encode-2";
 
             var videoService = new VideoService(new VideoRepository(_cosmosClient));
             var datavideo = await videoService.GetVideoById(jobDTO.videoId);
 
-            Asset newasset = new Asset();
             string outputAssetName = assetname.Replace("input", "output");
+            Asset newasset = new Asset(outputAssetName,outputAssetName,description:"hasil encode");
 
             var updatedAsset = await _client.Assets.CreateOrUpdateAsync(rgname, accname, outputAssetName, newasset);
 
@@ -291,10 +291,55 @@ namespace bl_syauqi.API
                 {
                         new TransformOutput
                         {
-                            Preset = new BuiltInStandardEncoderPreset()
-                            {
-                                PresetName = EncoderNamedPreset.AdaptiveStreaming
-                            }
+                            Preset = new StandardEncoderPreset(
+                                    codecs: new Codec[]
+                                    {
+                                        new AacAudio(
+                                            channels: 2,
+                                            samplingRate: 48000,
+                                            bitrate: 128000,
+                                            profile: AacAudioProfile.AacLc
+                                        ),
+
+                                        new H264Video(
+                                            layers:  new H264Layer[]
+                                            {
+                                                new H264Layer // Resolution: 1280x720
+                                                {
+                                                    Bitrate=1800000,
+                                                    Width="1280",
+                                                    Height="720",
+                                                    Label="HD",
+                                                },
+                                                new H264Layer // YouTube 144p: 256×144
+                                                {
+                                                    Bitrate=64000,
+                                                    Width="256",
+                                                    Height="144",
+                                                    Label="SD",
+                                                }
+                                            }),
+
+                                        new JpgImage(
+                                            start: "{Best}",
+                            //                    step: "25%",
+                            //                    range: "60%",
+                                            layers: new JpgLayer[] {
+                                                new JpgLayer(
+                                                    width: "100%",
+                                                    height: "100%"
+                                                ),
+                                            })
+                                    },
+                                    formats: new Format[]
+                                    {
+                                        new Mp4Format(
+                                            filenamePattern:"Video-{Basename}-{Label}-{Bitrate}{Extension}"
+                                        ),
+                                        new JpgFormat(
+                                            filenamePattern:"Thumbnail-{Basename}-{Index}{Extension}"
+                                        )
+                                    })
                         }
                 };
                 transform = await _client.Transforms.CreateOrUpdateAsync(rgname, accname, tranfname, output);
