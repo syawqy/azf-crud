@@ -1,6 +1,6 @@
 ﻿using System.Collections.Generic;
 
-namespace Binus.LMS.Content.ExternalAPI.MediaService.Model
+namespace bl_syauqi.API.DTO.MS.Model
 {
     public class Amsv3Manifest
     {

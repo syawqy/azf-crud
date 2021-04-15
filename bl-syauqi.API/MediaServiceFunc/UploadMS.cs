@@ -25,12 +25,15 @@ using static bl_syauqi.DAL.Repository.Repositories;
 using bl_syauqi.DAL.Models;
 using System.Net;
 using AzureFunctions.Extensions.Swashbuckle.Attribute;
+using bl_syauqi.API.DTO.MS.Model;
+using System.Xml;
 
 namespace bl_syauqi.API
 {
     public class UploadMS
     {
         private static readonly string _azConn = Environment.GetEnvironmentVariable("azConnection");
+        private static readonly string envThumbnailPath = Environment.GetEnvironmentVariable("envThumbnailPath");
         private static IAzureMediaServicesClient _client;
         private static ClientCredential _clientCredential;
         private static string aadtenantid = "0fa1f3f9-1330-425b-876a-9ffe2e503091";
@@ -48,8 +51,20 @@ namespace bl_syauqi.API
             _cosmosClient = cosmosClient;
         }
 
+        private async Task<IAzureMediaServicesClient> GetClient()
+        {
+            ServiceClientCredentials cred = await ApplicationTokenProvider.LoginSilentAsync(aadtenantid, _clientCredential, ActiveDirectoryServiceSettings.Azure);
+
+            IAzureMediaServicesClient client = new AzureMediaServicesClient(new Uri(armendpoint), cred)
+            {
+                SubscriptionId = subid,
+            };
+
+            return client;
+        }
+
         [FunctionName("UploadVideo")]
-        public static async Task<IActionResult> UploadVideo(
+        public async Task<IActionResult> UploadVideo(
             [HttpTrigger(AuthorizationLevel.Function, "post", Route = "UploadVideo")] HttpRequest req,
             [DurableClient] IDurableOrchestrationClient starter,
             ILogger log)
@@ -63,13 +78,7 @@ namespace bl_syauqi.API
                 
                 var assetname = $"input-{uniqueness}";
 
-                ServiceClientCredentials cred = await ApplicationTokenProvider.LoginSilentAsync(aadtenantid, _clientCredential, ActiveDirectoryServiceSettings.Azure);
-
-                IAzureMediaServicesClient client = new AzureMediaServicesClient(new Uri(armendpoint), cred)
-                {
-                    SubscriptionId = subid,
-                };
-                _client = client;
+                IAzureMediaServicesClient client = await GetClient();
 
                 Asset asset = await client.Assets.CreateOrUpdateAsync(rgname, accname, assetname, new Asset());
 
@@ -176,13 +185,7 @@ namespace bl_syauqi.API
 
                 var assetname = $"input-{uniqueness}";
 
-                ServiceClientCredentials cred = await ApplicationTokenProvider.LoginSilentAsync(aadtenantid, _clientCredential, ActiveDirectoryServiceSettings.Azure);
-
-                IAzureMediaServicesClient client = new AzureMediaServicesClient(new Uri(armendpoint), cred)
-                {
-                    SubscriptionId = subid,
-                };
-                _client = client;
+                IAzureMediaServicesClient client = await GetClient();
                 var newAsset = new Asset(name:assetname, container:assetname, description: "original file");
                 Asset asset = await client.Assets.CreateOrUpdateAsync(rgname, accname, assetname, newAsset);
 
@@ -301,9 +304,9 @@ namespace bl_syauqi.API
             StreamingLocator sl = await context.CallActivityAsync<StreamingLocator>("getStreamLocator", json);
             outputs.Add($"get streamingLoctaor at - {DateTime.Now}");
             List<string> urls = await context.CallActivityAsync<List<string>>("getStreamingUrls", json);
-            string urlString = String.Join(",", urls.ToArray());
-            outputs.Add($"streamingLoctaor url - {urlString}");
-
+            outputs.Add($"started finisihing act at - {DateTime.Now}");
+            await context.CallActivityAsync("Finishing", json);
+            outputs.Add($"job finished at - {DateTime.Now}");
             return outputs;
         }
         [FunctionName("StartEncode")]
@@ -320,6 +323,8 @@ namespace bl_syauqi.API
 
             string outputAssetName = assetname.Replace("input", "output");
             Asset newasset = new Asset(name:outputAssetName,container:outputAssetName,description:"hasil encode");
+
+            if(_client == null) _client = await GetClient();
 
             Asset cekAsset = await _client.Assets.GetAsync(rgname, accname, outputAssetName);
 
@@ -428,6 +433,8 @@ namespace bl_syauqi.API
             var videoService = new VideoService(new VideoRepository(_cosmosClient));
             var datavideo = await videoService.GetVideoById(jobDTO.videoId);
 
+            if (_client == null) _client = await GetClient();
+
             Job job;
             do
             {
@@ -464,7 +471,7 @@ namespace bl_syauqi.API
             return job;
         }
         [FunctionName("getStreamLocator")]
-        public static async Task<StreamingLocator> getStreamLocator([ActivityTrigger]
+        public async Task<StreamingLocator> getStreamLocator([ActivityTrigger]
             IDurableActivityContext context,
             ILogger log)
         {
@@ -473,6 +480,9 @@ namespace bl_syauqi.API
             string assetname = jobDTO.outputName;
             string locatorname = assetname.Replace("output","locator");
             StreamingLocator locator = new StreamingLocator();
+
+            if (_client == null) _client = await GetClient();
+            
             try
             {
                 locator = await _client.StreamingLocators.CreateAsync(
@@ -507,6 +517,8 @@ namespace bl_syauqi.API
 
             List<string> streamingUrls = new List<string>();
 
+            if (_client == null) _client = await GetClient();
+
             StreamingEndpoint streamingEndpoint = await _client.StreamingEndpoints.GetAsync(rgname, accname, DefaultStreamingEndpointName);
 
             if (streamingEndpoint != null)
@@ -535,6 +547,84 @@ namespace bl_syauqi.API
             await videoService .UpdateVideo(datavideo);
 
             return streamingUrls;
+        }
+        [FunctionName("Finishing")]
+        public async Task Finishing([ActivityTrigger]
+            IDurableActivityContext context,
+            ILogger log)
+        {
+            string json = context.GetInput<string>();
+            JobDTO jobDTO = JsonConvert.DeserializeObject<JobDTO>(json);
+
+            var videoService = new VideoService(new VideoRepository(_cosmosClient));
+            var datavideo = await videoService.GetVideoById(jobDTO.videoId);
+
+            if (_client == null) _client = await GetClient();
+
+            var response = await _client.Assets.ListContainerSasAsync(
+                    rgname,
+                    accname,
+                    datavideo.OutputContainer,
+                    permissions: AssetContainerPermission.Read,
+                    expiryTime: DateTime.UtcNow.AddMinutes(1).ToUniversalTime());
+
+            var sasUri = new Uri(response.AssetContainerSasUrls.First());
+            BlobResultSegment segment = await new CloudBlobContainer(sasUri).ListBlobsSegmentedAsync(null);
+
+            var getPreview = new List<Task>();
+            var previewImage = new List<byte[]>();
+            Amsv3Manifest manifest = null;
+            foreach (IListBlobItem blobItem in segment.Results)
+            {
+                CloudBlockBlob blob = blobItem as CloudBlockBlob;
+                if (blob == null) continue;
+
+                var name = blob.Name.ToLower();
+                if (name.Contains("_manifest.json"))
+                {
+                    log.LogInformation("--- getting manifest");
+                    manifest = JsonConvert.DeserializeObject<Amsv3Manifest>(
+                        await blob.DownloadTextAsync());
+                }
+
+                if (name.Contains("jpg"))
+                {
+                    log.LogInformation("--- getting preview " + getPreview.Count);
+                    getPreview.Add(Task.Run(async () =>
+                    {
+                        MemoryStream _stream = new MemoryStream();
+                        await blob.DownloadToStreamAsync(_stream);
+                        previewImage.Add(_stream.ToArray());
+                    }));
+                }
+            }
+            await Task.WhenAll(getPreview);
+
+            log.LogInformation("--- saving preview image (jpg)");
+            var path = envThumbnailPath.Replace("{fileName}", $"{datavideo.Id}.jpg");
+            await SaveThumbnail(path, previewImage.FirstOrDefault());
+
+            log.LogInformation("--- updating status data to publish");
+            datavideo.Status = "publish";
+            datavideo.Duration = ParseDuration(manifest.AssetFile.FirstOrDefault().Duration).ToString();
+
+            await videoService.UpdateVideo(datavideo);
+        }
+
+        public async Task SaveThumbnail(string path, byte[] file)
+        {
+            BlobServiceClient blobServiceClient = new BlobServiceClient(_azConn);
+            BlobContainerClient containerClient = blobServiceClient.GetBlobContainerClient("thumbnails");
+            BlobClient blob = containerClient.GetBlobClient(path);
+            using (Stream stream = new MemoryStream(file))
+            {
+                await blob.UploadAsync(stream);
+            }
+
+        }
+        public static int ParseDuration(string stdDuration)
+        {
+            return (int)Math.Round(XmlConvert.ToTimeSpan(stdDuration).TotalSeconds);
         }
     }
 }
